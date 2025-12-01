@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="cex.crypto.trading.mapper.OrderBookMapper">
+
+    <!-- Result Map for OrderBook -->
+    <resultMap id="OrderBookResultMap" type="cex.crypto.trading.domain.OrderBook">
+        <id property="id" column="id"/>
+        <result property="symbol" column="symbol"/>
+        <result property="buyOrders" column="buy_orders"
+                typeHandler="cex.crypto.trading.config.typehandler.OrderMapTypeHandler"/>
+        <result property="sellOrders" column="sell_orders"
+                typeHandler="cex.crypto.trading.config.typehandler.OrderMapTypeHandler"/>
+        <result property="version" column="version"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- Insert OrderBook -->
+    <insert id="insert" parameterType="cex.crypto.trading.domain.OrderBook"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO order_books (
+            symbol, buy_orders, sell_orders, version, updated_at
+        ) VALUES (
+            #{symbol},
+            #{buyOrders, typeHandler=cex.crypto.trading.config.typehandler.OrderMapTypeHandler},
+            #{sellOrders, typeHandler=cex.crypto.trading.config.typehandler.OrderMapTypeHandler},
+            #{version},
+            #{updatedAt}
+        )
+    </insert>
+
+    <!-- Update OrderBook with Optimistic Locking -->
+    <update id="update" parameterType="cex.crypto.trading.domain.OrderBook">
+        UPDATE order_books SET
+            buy_orders = #{buyOrders, typeHandler=cex.crypto.trading.config.typehandler.OrderMapTypeHandler},
+            sell_orders = #{sellOrders, typeHandler=cex.crypto.trading.config.typehandler.OrderMapTypeHandler},
+            version = version + 1,
+            updated_at = NOW(6)
+        WHERE symbol = #{symbol} AND version = #{version}
+    </update>
+
+    <!-- Find by Symbol -->
+    <select id="findBySymbol" resultMap="OrderBookResultMap">
+        SELECT * FROM order_books WHERE symbol = #{symbol}
+    </select>
+
+</mapper>

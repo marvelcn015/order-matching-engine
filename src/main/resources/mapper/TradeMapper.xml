@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="cex.crypto.trading.mapper.TradeMapper">
+
+    <!-- Result Map for Trade -->
+    <resultMap id="TradeResultMap" type="cex.crypto.trading.domain.Trade">
+        <id property="tradeId" column="trade_id"/>
+        <result property="buyOrderId" column="buy_order_id"/>
+        <result property="sellOrderId" column="sell_order_id"/>
+        <result property="symbol" column="symbol"/>
+        <result property="price" column="price"/>
+        <result property="quantity" column="quantity"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <!-- Insert Trade -->
+    <insert id="insert" parameterType="cex.crypto.trading.domain.Trade"
+            useGeneratedKeys="true" keyProperty="tradeId">
+        INSERT INTO trades (
+            buy_order_id, sell_order_id, symbol,
+            price, quantity, created_at
+        ) VALUES (
+            #{buyOrderId},
+            #{sellOrderId},
+            #{symbol},
+            #{price},
+            #{quantity},
+            #{createdAt}
+        )
+    </insert>
+
+    <!-- Find by ID -->
+    <select id="findById" resultMap="TradeResultMap">
+        SELECT * FROM trades WHERE trade_id = #{tradeId}
+    </select>
+
+    <!-- Find by Order ID -->
+    <select id="findByOrderId" resultMap="TradeResultMap">
+        SELECT * FROM trades
+        WHERE buy_order_id = #{orderId} OR sell_order_id = #{orderId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- Find by Symbol and Time Range -->
+    <select id="findBySymbol" resultMap="TradeResultMap">
+        SELECT * FROM trades
+        WHERE symbol = #{symbol}
+          AND created_at BETWEEN #{startTime} AND #{endTime}
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

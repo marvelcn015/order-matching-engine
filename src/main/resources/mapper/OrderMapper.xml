@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="cex.crypto.trading.mapper.OrderMapper">
+
+    <!-- Result Map for Order -->
+    <resultMap id="OrderResultMap" type="cex.crypto.trading.domain.Order">
+        <id property="orderId" column="order_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="symbol" column="symbol"/>
+        <result property="side" column="side"
+                typeHandler="cex.crypto.trading.config.typehandler.OrderSideTypeHandler"/>
+        <result property="type" column="type"
+                typeHandler="cex.crypto.trading.config.typehandler.OrderTypeTypeHandler"/>
+        <result property="price" column="price"/>
+        <result property="quantity" column="quantity"/>
+        <result property="filledQuantity" column="filled_quantity"/>
+        <result property="status" column="status"
+                typeHandler="cex.crypto.trading.config.typehandler.OrderStatusTypeHandler"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- Insert Order -->
+    <insert id="insert" parameterType="cex.crypto.trading.domain.Order"
+            useGeneratedKeys="true" keyProperty="orderId">
+        INSERT INTO orders (
+            user_id, symbol, side, type, price, quantity,
+            filled_quantity, status, created_at, updated_at
+        ) VALUES (
+            #{userId},
+            #{symbol},
+            #{side, typeHandler=cex.crypto.trading.config.typehandler.OrderSideTypeHandler},
+            #{type, typeHandler=cex.crypto.trading.config.typehandler.OrderTypeTypeHandler},
+            #{price},
+            #{quantity},
+            #{filledQuantity},
+            #{status, typeHandler=cex.crypto.trading.config.typehandler.OrderStatusTypeHandler},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <!-- Update Order -->
+    <update id="update" parameterType="cex.crypto.trading.domain.Order">
+        UPDATE orders SET
+            filled_quantity = #{filledQuantity},
+            status = #{status, typeHandler=cex.crypto.trading.config.typehandler.OrderStatusTypeHandler},
+            updated_at = #{updatedAt}
+        WHERE order_id = #{orderId}
+    </update>
+
+    <!-- Find by ID -->
+    <select id="findById" resultMap="OrderResultMap">
+        SELECT * FROM orders WHERE order_id = #{orderId}
+    </select>
+
+    <!-- Find by User ID -->
+    <select id="findByUserId" resultMap="OrderResultMap">
+        SELECT * FROM orders WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- Find by Symbol and Status -->
+    <select id="findBySymbolAndStatus" resultMap="OrderResultMap">
+        SELECT * FROM orders
+        WHERE symbol = #{symbol}
+          AND status = #{status, typeHandler=cex.crypto.trading.config.typehandler.OrderStatusTypeHandler}
+        ORDER BY created_at ASC
+    </select>
+
+    <!-- Delete by ID -->
+    <delete id="deleteById">
+        DELETE FROM orders WHERE order_id = #{orderId}
+    </delete>
+
+</mapper>
