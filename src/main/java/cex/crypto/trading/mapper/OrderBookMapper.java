@@ -4,6 +4,8 @@ import cex.crypto.trading.domain.OrderBook;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * MyBatis mapper interface for OrderBook entity
  */
@@ -30,4 +32,10 @@ public interface OrderBookMapper {
      * @return the order book, or null if not found
      */
     OrderBook findBySymbol(@Param("symbol") String symbol);
+
+    /**
+     * Find all order books (for testing)
+     * @return list of all order books
+     */
+    List<OrderBook> findAll();
 }

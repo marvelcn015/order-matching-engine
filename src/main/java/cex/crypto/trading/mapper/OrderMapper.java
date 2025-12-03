@@ -55,4 +55,10 @@ public interface OrderMapper {
      * @return number of rows affected
      */
     int deleteById(@Param("orderId") Long orderId);
+
+    /**
+     * Find all orders (for testing)
+     * @return list of all orders
+     */
+    List<Order> findAll();
 }

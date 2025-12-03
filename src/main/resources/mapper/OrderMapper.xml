@@ -75,4 +75,9 @@
         DELETE FROM orders WHERE order_id = #{orderId}
     </delete>
 
+    <!-- Find All Orders (for testing) -->
+    <select id="findAll" resultMap="OrderResultMap">
+        SELECT * FROM orders ORDER BY order_id
+    </select>
+
 </mapper>

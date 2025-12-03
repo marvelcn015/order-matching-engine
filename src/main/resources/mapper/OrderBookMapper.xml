@@ -45,4 +45,9 @@
         SELECT * FROM order_books WHERE symbol = #{symbol}
     </select>
 
+    <!-- Find All OrderBooks (for testing) -->
+    <select id="findAll" resultMap="OrderBookResultMap">
+        SELECT * FROM order_books ORDER BY id
+    </select>
+
 </mapper>

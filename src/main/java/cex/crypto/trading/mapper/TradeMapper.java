@@ -44,4 +44,17 @@ public interface TradeMapper {
     List<Trade> findBySymbol(@Param("symbol") String symbol,
                              @Param("startTime") LocalDateTime startTime,
                              @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * Delete trade by ID
+     * @param tradeId the trade ID
+     * @return number of rows affected
+     */
+    int deleteById(@Param("tradeId") Long tradeId);
+
+    /**
+     * Find all trades (for testing)
+     * @return list of all trades
+     */
+    List<Trade> findAll();
 }

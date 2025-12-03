@@ -51,4 +51,14 @@
         ORDER BY created_at DESC
     </select>
 
+    <!-- Delete by ID -->
+    <delete id="deleteById">
+        DELETE FROM trades WHERE trade_id = #{tradeId}
+    </delete>
+
+    <!-- Find All Trades (for testing) -->
+    <select id="findAll" resultMap="TradeResultMap">
+        SELECT * FROM trades ORDER BY trade_id
+    </select>
+
 </mapper>
