@@ -1,11 +1,18 @@
 package cex.crypto.trading.service;
 
 import cex.crypto.trading.domain.Order;
+import cex.crypto.trading.domain.OrderBook;
+import cex.crypto.trading.dto.CreateOrderRequest;
 import cex.crypto.trading.enums.OrderStatus;
+import cex.crypto.trading.enums.OrderType;
+import cex.crypto.trading.exception.InvalidOrderException;
+import cex.crypto.trading.exception.OrderCancellationException;
+import cex.crypto.trading.exception.OrderNotFoundException;
 import cex.crypto.trading.mapper.OrderMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -21,6 +28,9 @@ public class OrderService {
 
     @Autowired
     private OrderMapper orderMapper;
+
+    @Autowired
+    private OrderBookService orderBookService;
 
     /**
      * Create a new order
@@ -145,5 +155,83 @@ public class OrderService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Cancel an order (remove from order book and update status)
+     *
+     * @param orderId the order ID to cancel
+     * @param userId the user ID (for authorization)
+     * @return the cancelled order
+     * @throws OrderNotFoundException if order not found
+     * @throws OrderCancellationException if order cannot be cancelled
+     */
+    @Transactional
+    public Order cancelOrder(Long orderId, Long userId) {
+        // 1. Query the order
+        Order order = getOrderById(orderId);
+        if (order == null) {
+            throw new OrderNotFoundException("Order not found: " + orderId);
+        }
+
+        // 2. Verify user authorization
+        if (!order.getUserId().equals(userId)) {
+            throw new OrderCancellationException("Not authorized to cancel this order");
+        }
+
+        // 3. Check order status
+        if (order.getStatus() == OrderStatus.FILLED) {
+            throw new OrderCancellationException("Filled orders cannot be cancelled");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new OrderCancellationException("Order already cancelled");
+        }
+        if (order.getStatus() == OrderStatus.REJECTED) {
+            throw new OrderCancellationException("Rejected orders cannot be cancelled");
+        }
+
+        // 4. If order is in order book, remove it
+        if (order.getStatus() == OrderStatus.OPEN ||
+            order.getStatus() == OrderStatus.PARTIALLY_FILLED) {
+            OrderBook orderBook = orderBookService.getOrderBookBySymbol(order.getSymbol());
+            if (orderBook != null) {
+                synchronized (orderBook) {
+                    orderBookService.removeOrderFromBook(orderBook, order);
+                    orderBookService.saveOrderBook(orderBook);
+                }
+                log.info("Removed order {} from order book", orderId);
+            }
+        }
+
+        // 5. Update order status to CANCELLED
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
+        updateOrder(order);
+
+        log.info("Order cancelled: orderId={}, userId={}", orderId, userId);
+        return order;
+    }
+
+    /**
+     * Validate create order request
+     *
+     * @param request the create order request
+     * @throws InvalidOrderException if validation fails
+     */
+    public void validateCreateOrderRequest(CreateOrderRequest request) {
+        // LIMIT orders must have price
+        if (request.getType() == OrderType.LIMIT && request.getPrice() == null) {
+            throw new InvalidOrderException("LIMIT orders must specify price");
+        }
+
+        // MARKET orders should not have price
+        if (request.getType() == OrderType.MARKET && request.getPrice() != null) {
+            throw new InvalidOrderException("MARKET orders should not specify price");
+        }
+
+        // Business rule validation: check if symbol is supported (optional)
+        // Business rule validation: check if userId exists (optional)
+
+        log.debug("Order request validated: {}", request);
     }
 }

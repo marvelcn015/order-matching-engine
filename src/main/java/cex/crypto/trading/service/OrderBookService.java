@@ -2,7 +2,9 @@ package cex.crypto.trading.service;
 
 import cex.crypto.trading.domain.Order;
 import cex.crypto.trading.domain.OrderBook;
+import cex.crypto.trading.dto.OrderBookDepthResponse;
 import cex.crypto.trading.enums.OrderSide;
+import cex.crypto.trading.exception.OrderBookNotFoundException;
 import cex.crypto.trading.mapper.OrderBookMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -134,5 +139,77 @@ public class OrderBookService {
      */
     public OrderBook getOrderBookBySymbol(String symbol) {
         return orderBookMapper.findBySymbol(symbol);
+    }
+
+    /**
+     * Get order book aggregated depth
+     *
+     * @param symbol the trading symbol
+     * @param limit the number of price levels to return (optional)
+     * @return order book depth response
+     * @throws OrderBookNotFoundException if order book not found
+     */
+    public OrderBookDepthResponse getOrderBookDepth(String symbol, Integer limit) {
+        OrderBook orderBook = getOrderBookBySymbol(symbol);
+        if (orderBook == null) {
+            throw new OrderBookNotFoundException("Order book not found: " + symbol);
+        }
+
+        // Aggregate buy orders depth
+        List<OrderBookDepthResponse.PriceLevel> bids = aggregatePriceLevels(
+            orderBook.getBuyOrders(), limit);
+
+        // Aggregate sell orders depth
+        List<OrderBookDepthResponse.PriceLevel> asks = aggregatePriceLevels(
+            orderBook.getSellOrders(), limit);
+
+        return OrderBookDepthResponse.builder()
+            .symbol(symbol)
+            .bids(bids)
+            .asks(asks)
+            .bestBid(orderBook.getBestBid())
+            .bestAsk(orderBook.getBestAsk())
+            .spread(orderBook.getSpread())
+            .timestamp(LocalDateTime.now())
+            .build();
+    }
+
+    /**
+     * Aggregate price levels from order map
+     *
+     * @param orders the orders map (price -> queue of orders)
+     * @param limit the number of price levels to return (null for all)
+     * @return list of aggregated price levels
+     */
+    private List<OrderBookDepthResponse.PriceLevel> aggregatePriceLevels(
+            ConcurrentSkipListMap<BigDecimal, ConcurrentLinkedQueue<Order>> orders,
+            Integer limit) {
+
+        List<OrderBookDepthResponse.PriceLevel> levels = new ArrayList<>();
+        int count = 0;
+
+        for (Map.Entry<BigDecimal, ConcurrentLinkedQueue<Order>> entry : orders.entrySet()) {
+            if (limit != null && count >= limit) {
+                break;
+            }
+
+            BigDecimal price = entry.getKey();
+            ConcurrentLinkedQueue<Order> ordersAtPrice = entry.getValue();
+
+            // Calculate total quantity and order count at this price
+            BigDecimal totalQuantity = ordersAtPrice.stream()
+                .map(Order::getRemainingQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            levels.add(OrderBookDepthResponse.PriceLevel.builder()
+                .price(price)
+                .quantity(totalQuantity)
+                .orderCount(ordersAtPrice.size())
+                .build());
+
+            count++;
+        }
+
+        return levels;
     }
 }
