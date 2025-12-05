@@ -4,6 +4,7 @@ import cex.crypto.trading.domain.Order;
 import cex.crypto.trading.domain.OrderBook;
 import cex.crypto.trading.dto.MatchResult;
 import cex.crypto.trading.enums.OrderType;
+import cex.crypto.trading.service.redis.OrderBookSyncService;
 import cex.crypto.trading.strategy.OrderMatchingStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class MatchingEngineService {
     @Autowired
     private OrderBookService orderBookService;
 
+    @Autowired
+    private OrderBookSyncService orderBookSyncService;
+
     /**
      * Process an incoming order through the matching engine
      * This method is the main entry point for order matching
@@ -50,6 +54,9 @@ public class MatchingEngineService {
         log.info("Processing order through matching engine: orderId={}, symbol={}, side={}, type={}, price={}, qty={}",
                 order.getOrderId(), order.getSymbol(), order.getSide(),
                 order.getType(), order.getPrice(), order.getQuantity());
+
+        // Register symbol for Redis sync (idempotent)
+        orderBookSyncService.registerSymbol(order.getSymbol());
 
         // 1. Get or create order book for the symbol
         OrderBook orderBook = orderBookService.getOrCreateOrderBook(order.getSymbol());
