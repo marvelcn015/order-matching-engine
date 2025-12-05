@@ -71,18 +71,4 @@ public class RedisConfig {
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
-
-    /**
-     * ObjectMapper bean for manual serialization/deserialization.
-     * Shared configuration with Redis serializer.
-     *
-     * @return Configured ObjectMapper
-     */
-    @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        return objectMapper;
-    }
 }
