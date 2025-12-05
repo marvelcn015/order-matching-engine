@@ -78,6 +78,7 @@ public class Order {
     /**
      * Get remaining quantity to be filled
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public BigDecimal getRemainingQuantity() {
         return quantity.subtract(filledQuantity);
     }
@@ -85,6 +86,7 @@ public class Order {
     /**
      * Check if order is completely filled
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isFilled() {
         return filledQuantity.compareTo(quantity) >= 0;
     }
@@ -92,6 +94,7 @@ public class Order {
     /**
      * Check if order is partially filled
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isPartiallyFilled() {
         return filledQuantity.compareTo(BigDecimal.ZERO) > 0
             && filledQuantity.compareTo(quantity) < 0;
