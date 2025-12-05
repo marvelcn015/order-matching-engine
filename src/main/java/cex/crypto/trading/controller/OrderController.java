@@ -64,6 +64,7 @@ public class OrderController {
                 .price(request.getPrice())
                 .quantity(request.getQuantity())
                 .build();
+        orderService.createOrder(order);
 
         // Process order through matching engine
         matchingEngineService.processOrder(order);
