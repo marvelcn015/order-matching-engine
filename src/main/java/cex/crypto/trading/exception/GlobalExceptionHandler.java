@@ -14,54 +14,54 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 全局異常處理器
+ * Global exception handler
  */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
     /**
-     * 處理訂單不存在異常
+     * Handle order not found exception
      */
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleOrderNotFound(OrderNotFoundException e) {
-        log.warn("訂單不存在: {}", e.getMessage());
+        log.warn("Order not found: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(404, e.getMessage()));
     }
 
     /**
-     * 處理無效訂單異常
+     * Handle invalid order exception
      */
     @ExceptionHandler(InvalidOrderException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidOrder(InvalidOrderException e) {
-        log.warn("無效訂單: {}", e.getMessage());
+        log.warn("Invalid order: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(400, e.getMessage()));
     }
 
     /**
-     * 處理訂單取消異常
+     * Handle order cancellation exception
      */
     @ExceptionHandler(OrderCancellationException.class)
     public ResponseEntity<ApiResponse<Void>> handleOrderCancellation(OrderCancellationException e) {
-        log.warn("訂單取消失敗: {}", e.getMessage());
+        log.warn("Order cancellation failed: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(400, e.getMessage()));
     }
 
     /**
-     * 處理訂單簿不存在異常
+     * Handle order book not found exception
      */
     @ExceptionHandler(OrderBookNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleOrderBookNotFound(OrderBookNotFoundException e) {
-        log.warn("訂單簿不存在: {}", e.getMessage());
+        log.warn("Order book not found: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(404, e.getMessage()));
     }
 
     /**
-     * 處理參數驗證異常
+     * Handle request validation exception
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(
@@ -73,23 +73,23 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
 
-        log.warn("請求參數驗證失敗: {}", errors);
+        log.warn("Request validation failed: {}", errors);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.<Map<String, String>>builder()
                         .code(400)
-                        .message("請求參數驗證失敗")
+                        .message("Request validation failed")
                         .data(errors)
                         .timestamp(System.currentTimeMillis())
                         .build());
     }
 
     /**
-     * 處理通用業務異常
+     * Handle general business exception
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
-        log.error("業務異常: {}", e.getMessage(), e);
+        log.error("Business exception: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(400, e.getMessage()));
     }
@@ -106,12 +106,12 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 處理所有未捕獲的異常
+     * Handle all uncaught exceptions
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception e) {
-        log.error("系統內部錯誤: {}", e.getMessage(), e);
+        log.error("Internal server error: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(500, "系統內部錯誤，請稍後重試"));
+                .body(ApiResponse.error(500, "Internal server error, please try again later"));
     }
 }

@@ -1,7 +1,7 @@
 package cex.crypto.trading.exception;
 
 /**
- * 訂單簿不存在異常
+ * Order book not found exception
  */
 public class OrderBookNotFoundException extends BusinessException {
     public OrderBookNotFoundException(String message) {

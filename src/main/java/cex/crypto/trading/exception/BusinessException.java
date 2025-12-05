@@ -1,7 +1,7 @@
 package cex.crypto.trading.exception;
 
 /**
- * 業務異常基礎類
+ * Base business exception class
  */
 public class BusinessException extends RuntimeException {
     public BusinessException(String message) {

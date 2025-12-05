@@ -11,53 +11,53 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 訂單簿深度響應 DTO
+ * Order book depth response DTO
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "訂單簿深度響應")
+@Schema(description = "Order book depth response")
 public class OrderBookDepthResponse {
 
-    @Schema(description = "交易對符號", example = "BTC-USD")
+    @Schema(description = "Trading pair symbol", example = "BTC-USD")
     private String symbol;
 
-    @Schema(description = "買單深度（價格降序）")
+    @Schema(description = "Buy order depth (descending price)")
     private List<PriceLevel> bids;
 
-    @Schema(description = "賣單深度（價格升序）")
+    @Schema(description = "Sell order depth (ascending price)")
     private List<PriceLevel> asks;
 
-    @Schema(description = "最高買價", example = "50000.00")
+    @Schema(description = "Best bid price", example = "50000.00")
     private BigDecimal bestBid;
 
-    @Schema(description = "最低賣價", example = "50001.00")
+    @Schema(description = "Best ask price", example = "50001.00")
     private BigDecimal bestAsk;
 
-    @Schema(description = "買賣差價", example = "1.00")
+    @Schema(description = "Bid-ask spread", example = "1.00")
     private BigDecimal spread;
 
-    @Schema(description = "時間戳")
+    @Schema(description = "Timestamp")
     private LocalDateTime timestamp;
 
     /**
-     * 價格檔位 DTO
+     * Price level DTO
      */
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    @Schema(description = "價格檔位")
+    @Schema(description = "Price level")
     public static class PriceLevel {
 
-        @Schema(description = "價格", example = "50000.00")
+        @Schema(description = "Price", example = "50000.00")
         private BigDecimal price;
 
-        @Schema(description = "該價格的總量", example = "10.5")
+        @Schema(description = "Total quantity at this price", example = "10.5")
         private BigDecimal quantity;
 
-        @Schema(description = "該價格的訂單數量", example = "5")
+        @Schema(description = "Number of orders at this price", example = "5")
         private Integer orderCount;
     }
 }

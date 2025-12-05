@@ -6,8 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 統一的 API 響應包裝類
- * @param <T> 響應數據類型
+ * Unified API response wrapper class
+ * @param <T> Response data type
  */
 @Data
 @Builder
@@ -15,39 +15,39 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ApiResponse<T> {
     /**
-     * HTTP 狀態碼 (200, 400, 500 等)
+     * HTTP status code (200, 400, 500, etc.)
      */
     private Integer code;
 
     /**
-     * 響應消息
+     * Response message
      */
     private String message;
 
     /**
-     * 響應數據
+     * Response data
      */
     private T data;
 
     /**
-     * 時間戳
+     * Timestamp
      */
     @Builder.Default
     private Long timestamp = System.currentTimeMillis();
 
     /**
-     * 成功響應（帶數據）
+     * Success response with data
      */
     public static <T> ApiResponse<T> success(T data) {
         return ApiResponse.<T>builder()
                 .code(200)
-                .message("成功")
+                .message("Success")
                 .data(data)
                 .build();
     }
 
     /**
-     * 成功響應（帶消息和數據）
+     * Success response with custom message and data
      */
     public static <T> ApiResponse<T> success(String message, T data) {
         return ApiResponse.<T>builder()
@@ -58,7 +58,7 @@ public class ApiResponse<T> {
     }
 
     /**
-     * 失敗響應（指定狀態碼和消息）
+     * Error response with status code and message
      */
     public static <T> ApiResponse<T> error(Integer code, String message) {
         return ApiResponse.<T>builder()
@@ -69,7 +69,7 @@ public class ApiResponse<T> {
     }
 
     /**
-     * 失敗響應（默認 400）
+     * Error response with default 400 status code
      */
     public static <T> ApiResponse<T> error(String message) {
         return ApiResponse.<T>builder()
