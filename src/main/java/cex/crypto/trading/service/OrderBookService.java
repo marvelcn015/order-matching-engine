@@ -92,7 +92,8 @@ public class OrderBookService {
 
         ConcurrentLinkedQueue<Order> ordersAtPrice = targetMap.get(order.getPrice());
         if (ordersAtPrice != null) {
-            ordersAtPrice.remove(order);
+            // Remove order by orderId to avoid equality issues with timestamps
+            ordersAtPrice.removeIf(o -> o.getOrderId().equals(order.getOrderId()));
 
             // Remove empty price level
             if (ordersAtPrice.isEmpty()) {
