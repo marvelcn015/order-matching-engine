@@ -3,6 +3,8 @@ package cex.crypto.trading.service.redis;
 import cex.crypto.trading.domain.Order;
 import cex.crypto.trading.domain.OrderBook;
 import cex.crypto.trading.enums.OrderSide;
+import cex.crypto.trading.enums.OrderStatus;
+import cex.crypto.trading.enums.OrderType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -57,8 +59,8 @@ public class RedisOrderBookService {
         String symbol = orderBook.getSymbol();
 
         try {
-            // Use pipeline for atomic multi-key operations
-            redisTemplate.execute(new SessionCallback<Object>() {
+            // Use stringRedisTemplate for pipeline to avoid JSON serialization of ZSet/List values
+            stringRedisTemplate.execute(new SessionCallback<Object>() {
                 @Override
                 public Object execute(RedisOperations operations) throws DataAccessException {
                     operations.multi();
@@ -99,7 +101,7 @@ public class RedisOrderBookService {
         try {
             // 1. Check if metadata exists
             String metadataKey = buildMetadataKey(symbol);
-            Boolean hasMetadata = redisTemplate.hasKey(metadataKey);
+            Boolean hasMetadata = stringRedisTemplate.hasKey(metadataKey);
 
             if (hasMetadata == null || !hasMetadata) {
                 log.debug("Order book not found in Redis: {}", symbol);
@@ -107,7 +109,7 @@ public class RedisOrderBookService {
             }
 
             // 2. Load metadata
-            Map<Object, Object> metadata = redisTemplate.opsForHash().entries(metadataKey);
+            Map<Object, Object> metadata = stringRedisTemplate.opsForHash().entries(metadataKey);
             if (metadata.isEmpty()) {
                 log.warn("Metadata key exists but is empty: {}", symbol);
                 return null;
@@ -151,9 +153,9 @@ public class RedisOrderBookService {
      */
     public void deleteFromRedis(String symbol) {
         try {
-            Set<String> keys = redisTemplate.keys(String.format("orderbook:%s:*", symbol));
+            Set<String> keys = stringRedisTemplate.keys(String.format("orderbook:%s:*", symbol));
             if (keys != null && !keys.isEmpty()) {
-                redisTemplate.delete(keys);
+                stringRedisTemplate.delete(keys);
                 log.info("Deleted order book from Redis: symbol={}, keys={}", symbol, keys.size());
             }
         } catch (Exception e) {
@@ -205,7 +207,7 @@ public class RedisOrderBookService {
 
                 // 4. Save order details to Hash
                 String orderKey = buildOrderKey(order.getOrderId());
-                Map<String, Object> orderData = serializeOrder(order);
+                Map<String, String> orderData = serializeOrder(order);
                 operations.opsForHash().putAll(orderKey, orderData);
             }
         }
@@ -267,7 +269,7 @@ public class RedisOrderBookService {
     private Order loadOrder(Long orderId) {
         try {
             String orderKey = buildOrderKey(orderId);
-            Map<Object, Object> orderData = redisTemplate.opsForHash().entries(orderKey);
+            Map<Object, Object> orderData = stringRedisTemplate.opsForHash().entries(orderKey);
 
             if (orderData.isEmpty()) {
                 log.warn("Order not found in Redis: orderId={}", orderId);
@@ -304,10 +306,23 @@ public class RedisOrderBookService {
 
     /**
      * Serialize Order to Map for Redis Hash.
+     * All values are converted to strings to work with StringRedisTemplate.
      */
-    private Map<String, Object> serializeOrder(Order order) {
+    private Map<String, String> serializeOrder(Order order) {
         try {
-            return objectMapper.convertValue(order, new TypeReference<Map<String, Object>>() {});
+            Map<String, String> data = new HashMap<>();
+            data.put("orderId", order.getOrderId().toString());
+            data.put("userId", order.getUserId().toString());
+            data.put("symbol", order.getSymbol());
+            data.put("side", order.getSide().name());
+            data.put("type", order.getType().name());
+            data.put("price", order.getPrice() != null ? order.getPrice().toPlainString() : "");
+            data.put("quantity", order.getQuantity().toPlainString());
+            data.put("filledQuantity", order.getFilledQuantity().toPlainString());
+            data.put("status", order.getStatus().name());
+            data.put("createdAt", order.getCreatedAt().format(DATE_TIME_FORMATTER));
+            data.put("updatedAt", order.getUpdatedAt().format(DATE_TIME_FORMATTER));
+            return data;
         } catch (Exception e) {
             log.error("Error serializing order: orderId={}, error={}", order.getOrderId(), e.getMessage());
             throw new RuntimeException("Failed to serialize order", e);
@@ -316,18 +331,29 @@ public class RedisOrderBookService {
 
     /**
      * Deserialize Order from Map.
+     * Parses string values back to their original types.
      */
     private Order deserializeOrder(Map<Object, Object> data) {
         try {
-            // Convert to proper type map
-            Map<String, Object> convertedData = new HashMap<>();
-            for (Map.Entry<Object, Object> entry : data.entrySet()) {
-                convertedData.put(entry.getKey().toString(), entry.getValue());
-            }
+            String priceStr = (String) data.get("price");
+            BigDecimal price = (priceStr != null && !priceStr.isEmpty()) ?
+                    new BigDecimal(priceStr) : null;
 
-            return objectMapper.convertValue(convertedData, Order.class);
+            return Order.builder()
+                    .orderId(Long.valueOf((String) data.get("orderId")))
+                    .userId(Long.valueOf((String) data.get("userId")))
+                    .symbol((String) data.get("symbol"))
+                    .side(OrderSide.valueOf((String) data.get("side")))
+                    .type(OrderType.valueOf((String) data.get("type")))
+                    .price(price)
+                    .quantity(new BigDecimal((String) data.get("quantity")))
+                    .filledQuantity(new BigDecimal((String) data.get("filledQuantity")))
+                    .status(OrderStatus.valueOf((String) data.get("status")))
+                    .createdAt(LocalDateTime.parse((String) data.get("createdAt"), DATE_TIME_FORMATTER))
+                    .updatedAt(LocalDateTime.parse((String) data.get("updatedAt"), DATE_TIME_FORMATTER))
+                    .build();
         } catch (Exception e) {
-            log.error("Error deserializing order from Redis: {}", e.getMessage());
+            log.error("Error deserializing order from Redis: {}", e.getMessage(), e);
             return null;
         }
     }
