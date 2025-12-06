@@ -1,6 +1,5 @@
 package cex.crypto.trading.service.redis;
 
-import cex.crypto.trading.config.RedisTestConfig;
 import cex.crypto.trading.domain.Order;
 import cex.crypto.trading.domain.OrderBook;
 import cex.crypto.trading.enums.OrderSide;
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -37,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import(RedisTestConfig.class)
 class RedisOrderBookServiceTest {
 
     @Autowired
