@@ -5,6 +5,38 @@
 DROP TABLE IF EXISTS trades;
 DROP TABLE IF EXISTS order_books;
 DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS user_balances;
+DROP TABLE IF EXISTS users;
+
+-- Users Table
+CREATE TABLE users (
+    user_id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Unique user identifier',
+    username VARCHAR(50) NOT NULL UNIQUE COMMENT 'Username (unique)',
+    email VARCHAR(100) NOT NULL UNIQUE COMMENT 'Email address (unique)',
+    password_hash VARCHAR(255) NOT NULL COMMENT 'Hashed password',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'User creation timestamp',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Last update timestamp',
+
+    INDEX idx_username (username),
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='User accounts';
+
+-- User Balances Table
+-- Supports multiple currencies per user (BTC, USD, ETH, etc.)
+CREATE TABLE user_balances (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Unique balance record identifier',
+    user_id BIGINT NOT NULL COMMENT 'User ID reference',
+    currency VARCHAR(10) NOT NULL COMMENT 'Currency code (USD, BTC, ETH, etc.)',
+    available_balance DECIMAL(20, 8) NOT NULL DEFAULT 0 COMMENT 'Available balance (can be used for trading)',
+    frozen_balance DECIMAL(20, 8) NOT NULL DEFAULT 0 COMMENT 'Frozen balance (locked in active orders)',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Balance record creation timestamp',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Last update timestamp',
+
+    UNIQUE KEY uk_user_currency (user_id, currency),
+    INDEX idx_user_id (user_id),
+
+    CONSTRAINT fk_user_balance FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='User balance records (multi-currency)';
 
 -- Orders Table
 -- Stores all trading orders (buy and sell)

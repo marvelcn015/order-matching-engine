@@ -4,6 +4,37 @@
 DROP TABLE IF EXISTS trades;
 DROP TABLE IF EXISTS order_books;
 DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS user_balances;
+DROP TABLE IF EXISTS users;
+
+-- Users Table
+CREATE TABLE users (
+    user_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+);
+
+CREATE INDEX idx_username ON users(username);
+CREATE INDEX idx_email ON users(email);
+
+-- User Balances Table
+CREATE TABLE user_balances (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    currency VARCHAR(10) NOT NULL,
+    available_balance DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    frozen_balance DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
+    CONSTRAINT uk_user_currency UNIQUE (user_id, currency),
+    CONSTRAINT fk_user_balance FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_user_id_balance ON user_balances(user_id);
 
 -- Orders Table
 CREATE TABLE orders (
