@@ -61,4 +61,12 @@ public interface OrderMapper {
      * @return list of all orders
      */
     List<Order> findAll();
+
+    /**
+     * Find all order IDs for Bloom Filter initialization
+     * @param offset the offset for pagination
+     * @param limit the number of records to fetch
+     * @return list of order IDs
+     */
+    List<Long> findAllOrderIds(@Param("offset") long offset, @Param("limit") int limit);
 }

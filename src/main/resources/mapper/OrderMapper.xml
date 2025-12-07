@@ -80,4 +80,11 @@
         SELECT * FROM orders ORDER BY order_id
     </select>
 
+    <!-- Find All Order IDs (for Bloom Filter initialization) -->
+    <select id="findAllOrderIds" resultType="java.lang.Long">
+        SELECT order_id FROM orders
+        ORDER BY order_id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
 </mapper>

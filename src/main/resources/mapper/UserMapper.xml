@@ -44,4 +44,10 @@
         DELETE FROM users WHERE user_id = #{userId}
     </delete>
 
+    <select id="findAllUserIds" resultType="java.lang.Long">
+        SELECT user_id FROM users
+        ORDER BY user_id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
 </mapper>

@@ -4,6 +4,8 @@ import cex.crypto.trading.domain.User;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * MyBatis mapper for User operations
  */
@@ -38,4 +40,12 @@ public interface UserMapper {
      * Delete user by ID
      */
     void deleteById(@Param("userId") Long userId);
+
+    /**
+     * Find all user IDs for Bloom Filter initialization
+     * @param offset the offset for pagination
+     * @param limit the number of records to fetch
+     * @return list of user IDs
+     */
+    List<Long> findAllUserIds(@Param("offset") long offset, @Param("limit") int limit);
 }
