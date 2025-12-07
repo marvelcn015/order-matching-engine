@@ -24,6 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 /**
  * Unit tests for CacheWarmerService
  */
@@ -131,6 +133,9 @@ class CacheWarmerServiceTest {
 
     @Test
     void testWarmCacheOnStartup() {
+        // Temporarily enable cache warmer for this test
+        ReflectionTestUtils.setField(cacheWarmerService, "enabled", true);
+
         // Mock active users
         List<Long> activeUsers = List.of(1L, 2L, 3L);
         when(orderMapper.findActiveUserIds(1000, 24)).thenReturn(activeUsers);
@@ -173,6 +178,9 @@ class CacheWarmerServiceTest {
 
     @Test
     void testManualWarmCache() {
+        // Temporarily enable cache warmer for this test
+        ReflectionTestUtils.setField(cacheWarmerService, "enabled", true);
+
         // Mock active users
         when(orderMapper.findActiveUserIds(anyInt(), anyInt())).thenReturn(List.of(1L));
         when(balanceMapper.findByUserId(1L)).thenReturn(List.of(
