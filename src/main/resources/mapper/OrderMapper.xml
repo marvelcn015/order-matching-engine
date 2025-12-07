@@ -89,12 +89,16 @@
 
     <!-- Find Active User IDs (for cache warming) -->
     <select id="findActiveUserIds" resultType="java.lang.Long">
-        SELECT DISTINCT user_id
-        FROM orders
-        WHERE created_at > TIMESTAMPADD(HOUR, -#{hours}, NOW())
-          AND status IN ('OPEN', 'PARTIALLY_FILLED', 'FILLED')
-        ORDER BY created_at DESC
-        LIMIT #{limit}
+        SELECT user_id
+        FROM (
+            SELECT DISTINCT user_id, MAX(created_at) as last_activity
+            FROM orders
+            WHERE created_at > TIMESTAMPADD(HOUR, -#{hours}, NOW())
+              AND status IN ('OPEN', 'PARTIALLY_FILLED', 'FILLED')
+            GROUP BY user_id
+            ORDER BY last_activity DESC
+            LIMIT #{limit}
+        ) active_users
     </select>
 
 </mapper>

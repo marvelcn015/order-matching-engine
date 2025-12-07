@@ -51,6 +51,7 @@ public class BloomFilterService {
 
     /**
      * Initialize Bloom Filters on application startup
+     * Only initializes the Bloom Filter structure, does not load data
      */
     @PostConstruct
     public void initialize() {
@@ -76,7 +77,18 @@ public class BloomFilterService {
             log.info("Order Bloom Filter already exists, skipping initialization");
         }
 
-        // Load existing data asynchronously to avoid blocking startup
+        log.info("Bloom Filter initialization completed");
+    }
+
+    /**
+     * Load existing data into Bloom Filters after application is fully started
+     * Uses ApplicationReadyEvent to ensure database is ready
+     */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void loadExistingDataOnReady() {
+        log.info("Loading existing data into Bloom Filters...");
+
+        // Load existing data asynchronously to avoid blocking
         CompletableFuture.runAsync(this::loadExistingUsers)
                 .exceptionally(e -> {
                     log.error("Failed to load existing users into Bloom Filter", e);
@@ -88,8 +100,6 @@ public class BloomFilterService {
                     log.error("Failed to load existing orders into Bloom Filter", e);
                     return null;
                 });
-
-        log.info("Bloom Filter initialization completed");
     }
 
     /**
