@@ -125,6 +125,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle lock acquisition exception
+     */
+    @ExceptionHandler(LockAcquisitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLockAcquisition(LockAcquisitionException e) {
+        log.warn("Lock acquisition failed: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(503, "Service temporarily unavailable, please retry"));
+    }
+
+    /**
      * Handle static resource not found (e.g., favicon.ico)
      * Do not log as error since this is expected behavior
      */
