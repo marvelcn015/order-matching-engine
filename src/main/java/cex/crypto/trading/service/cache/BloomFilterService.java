@@ -173,6 +173,7 @@ public class BloomFilterService {
         if (userId == null) {
             return false;
         }
+        ensureInitialized();
         return userBloomFilter.contains(userId);
     }
 
@@ -185,6 +186,7 @@ public class BloomFilterService {
         if (orderId == null) {
             return false;
         }
+        ensureInitialized();
         return orderBloomFilter.contains(orderId);
     }
 
@@ -195,6 +197,7 @@ public class BloomFilterService {
      */
     public void addUser(Long userId) {
         if (userId != null) {
+            ensureInitialized();
             userBloomFilter.add(userId);
             log.debug("Added user {} to Bloom Filter", userId);
         }
@@ -207,8 +210,39 @@ public class BloomFilterService {
      */
     public void addOrder(Long orderId) {
         if (orderId != null) {
+            ensureInitialized();
             orderBloomFilter.add(orderId);
             log.debug("Added order {} to Bloom Filter", orderId);
+        }
+    }
+
+    /**
+     * Ensure Bloom Filters are initialized
+     * This is useful for lazy initialization in test environments
+     */
+    private void ensureInitialized() {
+        if (userBloomFilter == null || !userBloomFilter.isExists()) {
+            synchronized (this) {
+                if (userBloomFilter == null || !userBloomFilter.isExists()) {
+                    log.warn("User Bloom Filter not initialized, initializing now");
+                    if (userBloomFilter == null) {
+                        userBloomFilter = redissonClient.getBloomFilter("bloom:filter:users");
+                    }
+                    userBloomFilter.tryInit(userExpectedInsertions, userFpp);
+                }
+            }
+        }
+
+        if (orderBloomFilter == null || !orderBloomFilter.isExists()) {
+            synchronized (this) {
+                if (orderBloomFilter == null || !orderBloomFilter.isExists()) {
+                    log.warn("Order Bloom Filter not initialized, initializing now");
+                    if (orderBloomFilter == null) {
+                        orderBloomFilter = redissonClient.getBloomFilter("bloom:filter:orders");
+                    }
+                    orderBloomFilter.tryInit(orderExpectedInsertions, orderFpp);
+                }
+            }
         }
     }
 

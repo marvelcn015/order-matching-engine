@@ -3,10 +3,12 @@ package cex.crypto.trading.service.cache;
 import cex.crypto.trading.domain.UserBalance;
 import cex.crypto.trading.mapper.OrderMapper;
 import cex.crypto.trading.mapper.UserBalanceMapper;
+import cex.crypto.trading.service.UserBalanceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,10 @@ public class CacheWarmerService {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    @Lazy
+    private UserBalanceService balanceService;
 
     @Value("${cache.warmer.enabled:true}")
     private boolean enabled;
@@ -100,6 +106,7 @@ public class CacheWarmerService {
 
     /**
      * Warm a single cache entry with random TTL
+     * Delegates to UserBalanceService to warm both L1 and L2 caches
      *
      * @param balance the user balance to cache
      */
@@ -108,12 +115,8 @@ public class CacheWarmerService {
             return;
         }
 
-        String cacheKey = buildCacheKey(balance.getUserId(), balance.getCurrency());
-        long randomTtl = getRandomRedisTtl();
-
-        redisTemplate.opsForValue().set(cacheKey, balance, randomTtl, TimeUnit.SECONDS);
-
-        log.debug("Warmed cache: key={}, ttl={}s", cacheKey, randomTtl);
+        // Use UserBalanceService to warm both L1 (Caffeine) and L2 (Redis) caches
+        balanceService.warmCache(balance);
     }
 
     /**

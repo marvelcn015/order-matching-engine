@@ -5,6 +5,8 @@ import cex.crypto.trading.dto.CreateUserRequest;
 import cex.crypto.trading.exception.BusinessException;
 import cex.crypto.trading.exception.UserNotFoundException;
 import cex.crypto.trading.mapper.UserMapper;
+import cex.crypto.trading.service.cache.BloomFilterService;
+import cex.crypto.trading.service.cache.DistributedLockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -21,44 +23,63 @@ public class UserService {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private BloomFilterService bloomFilterService;
+
+    @Autowired
+    private DistributedLockService lockService;
+
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /**
-     * Create a new user
+     * Create a new user (with distributed lock protection)
      */
     @Transactional
     public User createUser(CreateUserRequest request) {
-        // Check if username already exists
-        if (userMapper.findByUsername(request.getUsername()) != null) {
-            throw new BusinessException("Username already exists: " + request.getUsername());
-        }
+        String lockKey = "lock:user:create:" + request.getUsername();
 
-        // Check if email already exists
-        if (userMapper.findByEmail(request.getEmail()) != null) {
-            throw new BusinessException("Email already exists: " + request.getEmail());
-        }
+        return lockService.executeWithLock(lockKey, () -> {
+            // Check if username already exists
+            if (userMapper.findByUsername(request.getUsername()) != null) {
+                throw new BusinessException("Username already exists: " + request.getUsername());
+            }
 
-        // Hash password
-        String passwordHash = passwordEncoder.encode(request.getPassword());
+            // Check if email already exists
+            if (userMapper.findByEmail(request.getEmail()) != null) {
+                throw new BusinessException("Email already exists: " + request.getEmail());
+            }
 
-        // Create user entity
-        User user = User.builder()
-                .username(request.getUsername())
-                .email(request.getEmail())
-                .passwordHash(passwordHash)
-                .build();
+            // Hash password
+            String passwordHash = passwordEncoder.encode(request.getPassword());
 
-        // Insert into database
-        userMapper.insert(user);
-        log.info("User created: userId={}, username={}", user.getUserId(), user.getUsername());
+            // Create user entity
+            User user = User.builder()
+                    .username(request.getUsername())
+                    .email(request.getEmail())
+                    .passwordHash(passwordHash)
+                    .build();
 
-        return user;
+            // Insert into database
+            userMapper.insert(user);
+
+            // Add to Bloom Filter
+            bloomFilterService.addUser(user.getUserId());
+
+            log.info("User created: userId={}, username={}", user.getUserId(), user.getUsername());
+            return user;
+        });
     }
 
     /**
-     * Get user by ID
+     * Get user by ID (with Bloom Filter protection)
      */
     public User getUserById(Long userId) {
+        // Bloom Filter check (prevents cache penetration)
+        if (!bloomFilterService.mayExistUser(userId)) {
+            log.debug("User not found in Bloom Filter: {}", userId);
+            throw new UserNotFoundException("User not found: " + userId);
+        }
+
         User user = userMapper.findById(userId);
         if (user == null) {
             throw new UserNotFoundException("User not found: " + userId);

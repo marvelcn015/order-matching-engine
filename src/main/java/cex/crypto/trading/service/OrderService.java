@@ -9,6 +9,7 @@ import cex.crypto.trading.exception.InvalidOrderException;
 import cex.crypto.trading.exception.OrderCancellationException;
 import cex.crypto.trading.exception.OrderNotFoundException;
 import cex.crypto.trading.mapper.OrderMapper;
+import cex.crypto.trading.service.cache.BloomFilterService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,11 @@ public class OrderService {
     @Autowired
     private OrderBookService orderBookService;
 
+    @Autowired
+    private BloomFilterService bloomFilterService;
+
     /**
-     * Create a new order
+     * Create a new order (adds to Bloom Filter)
      *
      * @param order the order to create
      * @return the created order with generated ID
@@ -52,6 +56,9 @@ public class OrderService {
 
         int result = orderMapper.insert(order);
         if (result > 0) {
+            // Add to Bloom Filter for cache penetration protection
+            bloomFilterService.addOrder(order.getOrderId());
+
             log.info("Order created: orderId={}, userId={}, symbol={}, side={}, type={}, price={}, qty={}",
                     order.getOrderId(), order.getUserId(), order.getSymbol(),
                     order.getSide(), order.getType(), order.getPrice(), order.getQuantity());
@@ -112,12 +119,18 @@ public class OrderService {
     }
 
     /**
-     * Get order by ID
+     * Get order by ID (with Bloom Filter protection)
      *
      * @param orderId the order ID
      * @return the order, or null if not found
      */
     public Order getOrderById(Long orderId) {
+        // Bloom Filter check (prevents cache penetration)
+        if (!bloomFilterService.mayExistOrder(orderId)) {
+            log.debug("Order not found in Bloom Filter: {}", orderId);
+            return null;
+        }
+
         return orderMapper.findById(orderId);
     }
 
