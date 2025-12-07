@@ -69,4 +69,12 @@ public interface OrderMapper {
      * @return list of order IDs
      */
     List<Long> findAllOrderIds(@Param("offset") long offset, @Param("limit") int limit);
+
+    /**
+     * Find active user IDs based on recent order activity
+     * @param limit the number of users to return
+     * @param hours the number of hours to look back
+     * @return list of active user IDs
+     */
+    List<Long> findActiveUserIds(@Param("limit") int limit, @Param("hours") int hours);
 }
