@@ -13,6 +13,10 @@ import cex.crypto.trading.service.OrderBookService;
 import cex.crypto.trading.service.OrderService;
 import cex.crypto.trading.service.TradeService;
 import cex.crypto.trading.strategy.OrderMatchingStrategy;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -53,6 +57,63 @@ public class MatchingEngineConsumer {
     @Autowired
     private TradeEventProducerService tradeEventProducer;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    // Metrics counters and timers
+    private Counter messagesReceivedCounter;
+    private Counter messagesProcessedCounter;
+    private Counter messagesFailedCounter;
+    private Counter duplicateMessagesCounter;
+    private Timer processingTimer;
+
+    /**
+     * Initialize metrics on application startup
+     */
+    @PostConstruct
+    public void initMetrics() {
+        String consumerGroup = "matching-engine-consumer-group";
+        String topic = "order-input";
+
+        messagesReceivedCounter = Counter.builder("kafka.consumer.messages.received")
+                .description("Total messages received by consumer")
+                .tag("consumer_group", consumerGroup)
+                .tag("topic", topic)
+                .tag("consumer", "matching-engine")
+                .register(meterRegistry);
+
+        messagesProcessedCounter = Counter.builder("kafka.consumer.messages.processed")
+                .description("Total messages successfully processed")
+                .tag("consumer_group", consumerGroup)
+                .tag("topic", topic)
+                .tag("consumer", "matching-engine")
+                .register(meterRegistry);
+
+        messagesFailedCounter = Counter.builder("kafka.consumer.messages.failed")
+                .description("Total messages failed after retries")
+                .tag("consumer_group", consumerGroup)
+                .tag("topic", topic)
+                .tag("consumer", "matching-engine")
+                .register(meterRegistry);
+
+        duplicateMessagesCounter = Counter.builder("kafka.consumer.messages.duplicate")
+                .description("Total duplicate messages detected")
+                .tag("consumer_group", consumerGroup)
+                .tag("topic", topic)
+                .tag("consumer", "matching-engine")
+                .register(meterRegistry);
+
+        processingTimer = Timer.builder("kafka.consumer.processing.time")
+                .description("Time taken to process a message")
+                .tag("consumer_group", consumerGroup)
+                .tag("topic", topic)
+                .tag("consumer", "matching-engine")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        log.info("Initialized metrics for MatchingEngineConsumer");
+    }
+
     /**
      * Consume order from Kafka and process through matching engine
      *
@@ -72,56 +133,69 @@ public class MatchingEngineConsumer {
             @Header(KafkaHeaders.OFFSET) long offset,
             Acknowledgment acknowledgment) {
 
+        // Increment received counter
+        messagesReceivedCounter.increment();
+
         log.info("Consumed order event: orderId={}, messageId={}, symbol={}, partition={}, offset={}",
                 event.getOrderId(), event.getMessageId(), event.getSymbol(), partition, offset);
 
-        try {
-            // 1. Idempotency check - prevent duplicate processing
-            if (idempotencyService.isMessageProcessed(event.getMessageId())) {
-                log.warn("Duplicate message detected, skipping: messageId={}, orderId={}",
-                        event.getMessageId(), event.getOrderId());
+        // Wrap processing in timer
+        processingTimer.record(() -> {
+            try {
+                // 1. Idempotency check - prevent duplicate processing
+                if (idempotencyService.isMessageProcessed(event.getMessageId())) {
+                    log.warn("Duplicate message detected, skipping: messageId={}, orderId={}",
+                            event.getMessageId(), event.getOrderId());
+                    duplicateMessagesCounter.increment();
+                    acknowledgment.acknowledge();
+                    return;
+                }
+
+                // 2. Load order from database
+                Order order = orderService.getOrderById(event.getOrderId());
+                if (order == null) {
+                    log.error("Order not found in database: orderId={}", event.getOrderId());
+                    acknowledgment.acknowledge(); // Skip this message
+                    return;
+                }
+
+                // 3. Check order status (only process PENDING orders)
+                if (order.getStatus() != OrderStatus.PENDING) {
+                    log.warn("Order already processed: orderId={}, status={}",
+                            order.getOrderId(), order.getStatus());
+                    acknowledgment.acknowledge();
+                    return;
+                }
+
+                // 4. Process order through matching engine
+                processOrder(order);
+
+                // 5. Mark message as processed (idempotency)
+                idempotencyService.markMessageProcessed(event.getMessageId(), event.getOrderId());
+
+                // 6. Acknowledge Kafka message (commits offset)
                 acknowledgment.acknowledge();
-                return;
+
+                // Increment success counter
+                messagesProcessedCounter.increment();
+
+                log.info("Order processing complete: orderId={}, finalStatus={}",
+                        event.getOrderId(), order.getStatus());
+
+            } catch (Exception e) {
+                log.error("Error processing order: orderId={}, messageId={}, error={}",
+                        event.getOrderId(), event.getMessageId(), e.getMessage(), e);
+
+                // Increment failure counter
+                messagesFailedCounter.increment();
+
+                // Update order to FAILED status
+                updateOrderToFailed(event.getOrderId(), e.getMessage());
+
+                // Re-throw exception to trigger retry/DLQ mechanism
+                throw new RuntimeException("Order processing failed: " + event.getOrderId(), e);
             }
-
-            // 2. Load order from database
-            Order order = orderService.getOrderById(event.getOrderId());
-            if (order == null) {
-                log.error("Order not found in database: orderId={}", event.getOrderId());
-                acknowledgment.acknowledge(); // Skip this message
-                return;
-            }
-
-            // 3. Check order status (only process PENDING orders)
-            if (order.getStatus() != OrderStatus.PENDING) {
-                log.warn("Order already processed: orderId={}, status={}",
-                        order.getOrderId(), order.getStatus());
-                acknowledgment.acknowledge();
-                return;
-            }
-
-            // 4. Process order through matching engine
-            processOrder(order);
-
-            // 5. Mark message as processed (idempotency)
-            idempotencyService.markMessageProcessed(event.getMessageId(), event.getOrderId());
-
-            // 6. Acknowledge Kafka message (commits offset)
-            acknowledgment.acknowledge();
-
-            log.info("Order processing complete: orderId={}, finalStatus={}",
-                    event.getOrderId(), order.getStatus());
-
-        } catch (Exception e) {
-            log.error("Error processing order: orderId={}, messageId={}, error={}",
-                    event.getOrderId(), event.getMessageId(), e.getMessage(), e);
-
-            // Update order to FAILED status
-            updateOrderToFailed(event.getOrderId(), e.getMessage());
-
-            // Re-throw exception to trigger retry/DLQ mechanism
-            throw new RuntimeException("Order processing failed: " + event.getOrderId(), e);
-        }
+        });
     }
 
     /**

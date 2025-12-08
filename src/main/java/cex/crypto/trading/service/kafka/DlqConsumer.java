@@ -5,6 +5,9 @@ import cex.crypto.trading.enums.OrderStatus;
 import cex.crypto.trading.event.OrderCreatedEvent;
 import cex.crypto.trading.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +31,40 @@ public class DlqConsumer {
     @Autowired
     private OrderService orderService;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // Metrics counters
+    private Counter dlqOrderInputCounter;
+    private Counter dlqTradeOutputCounter;
+    private Counter dlqProcessedCounter;
+
+    /**
+     * Initialize metrics on application startup
+     */
+    @PostConstruct
+    public void initMetrics() {
+        dlqOrderInputCounter = Counter.builder("kafka.consumer.dlq.messages")
+                .description("Total messages received in DLQ")
+                .tag("dlq_topic", "order-input-dlq")
+                .tag("consumer", "dlq-processor")
+                .register(meterRegistry);
+
+        dlqTradeOutputCounter = Counter.builder("kafka.consumer.dlq.messages")
+                .description("Total messages received in DLQ")
+                .tag("dlq_topic", "trade-output-dlq")
+                .tag("consumer", "dlq-processor")
+                .register(meterRegistry);
+
+        dlqProcessedCounter = Counter.builder("kafka.consumer.dlq.processed")
+                .description("Total DLQ messages successfully processed")
+                .tag("consumer", "dlq-processor")
+                .register(meterRegistry);
+
+        log.info("Initialized metrics for DlqConsumer");
+    }
 
     /**
      * Consume messages from order-input DLQ
@@ -41,6 +77,9 @@ public class DlqConsumer {
     public void consumeDlqMessage(
             ConsumerRecord<String, String> record,
             Acknowledgment acknowledgment) {
+
+        // Increment DLQ counter
+        dlqOrderInputCounter.increment();
 
         log.error("DLQ message received: topic={}, partition={}, offset={}, key={}, value={}",
                 record.topic(), record.partition(), record.offset(), record.key(), record.value());
@@ -86,6 +125,9 @@ public class DlqConsumer {
             // Acknowledge the DLQ message
             acknowledgment.acknowledge();
 
+            // Increment processed counter
+            dlqProcessedCounter.increment();
+
         } catch (Exception e) {
             log.error("Error processing DLQ message: {}", e.getMessage(), e);
 
@@ -107,6 +149,9 @@ public class DlqConsumer {
             ConsumerRecord<String, String> record,
             Acknowledgment acknowledgment) {
 
+        // Increment DLQ counter
+        dlqTradeOutputCounter.increment();
+
         log.error("Trade DLQ message received: topic={}, partition={}, offset={}, value={}",
                 record.topic(), record.partition(), record.offset(), record.value());
 
@@ -116,6 +161,9 @@ public class DlqConsumer {
             // so trade-output-dlq is less critical
 
             acknowledgment.acknowledge();
+
+            // Increment processed counter
+            dlqProcessedCounter.increment();
 
         } catch (Exception e) {
             log.error("Error processing trade DLQ message: {}", e.getMessage(), e);
