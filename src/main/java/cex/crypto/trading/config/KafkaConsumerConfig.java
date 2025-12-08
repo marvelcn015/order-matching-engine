@@ -43,10 +43,9 @@ public class KafkaConsumerConfig {
         // Connection
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-        // Deserialization
+        // Deserialization (will be configured programmatically in ConsumerFactory)
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
         // Consumer group settings
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"); // Process all messages
@@ -61,10 +60,6 @@ public class KafkaConsumerConfig {
         // Reliability
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000); // 30 seconds
         props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000); // 10 seconds
-
-        // JSON Deserialization - trust our event package
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "cex.crypto.trading.event");
-        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
 
         return props;
     }
