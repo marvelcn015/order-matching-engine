@@ -32,5 +32,10 @@ public enum OrderStatus {
     /**
      * Order has been rejected by the system
      */
-    REJECTED
+    REJECTED,
+
+    /**
+     * Processing failed after retries (sent to DLQ)
+     */
+    FAILED
 }
