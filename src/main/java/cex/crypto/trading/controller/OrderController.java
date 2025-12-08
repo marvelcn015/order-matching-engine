@@ -3,10 +3,13 @@ package cex.crypto.trading.controller;
 import cex.crypto.trading.domain.Order;
 import cex.crypto.trading.dto.ApiResponse;
 import cex.crypto.trading.dto.CreateOrderRequest;
+import cex.crypto.trading.dto.OrderAcceptedResponse;
 import cex.crypto.trading.dto.OrderResponse;
+import cex.crypto.trading.enums.OrderStatus;
+import cex.crypto.trading.exception.KafkaPublishException;
 import cex.crypto.trading.exception.OrderNotFoundException;
-import cex.crypto.trading.service.MatchingEngineService;
 import cex.crypto.trading.service.OrderService;
+import cex.crypto.trading.service.kafka.OrderEventProducerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,29 +36,32 @@ public class OrderController {
     private OrderService orderService;
 
     @Autowired
-    private MatchingEngineService matchingEngineService;
+    private OrderEventProducerService orderEventProducerService;
 
     /**
-     * Create a new order
+     * Create a new order (ASYNC)
+     * Returns 202 ACCEPTED immediately after order is queued for processing
      *
      * @param request the create order request
-     * @return API response with created order details
+     * @return API response with order acceptance confirmation
      */
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
-        summary = "Create a new order",
-        description = "Submit a new LIMIT or MARKET order. LIMIT orders require price, MARKET orders do not."
+        summary = "Create a new order (async)",
+        description = "Submit a new LIMIT or MARKET order for async processing. Returns immediately with order ID. " +
+                      "Use GET /api/v1/orders/{orderId} to check status or connect to SSE for real-time updates."
     )
-    public ApiResponse<OrderResponse> createOrder(
+    public ApiResponse<OrderAcceptedResponse> createOrder(
             @Valid @RequestBody CreateOrderRequest request) {
 
-        log.info("Received create order request: {}", request);
+        String correlationId = java.util.UUID.randomUUID().toString();
+        log.info("Received create order request: {}, correlationId={}", request, correlationId);
 
-        // Validate request
+        // 1. Validate request (synchronous)
         orderService.validateCreateOrderRequest(request);
 
-        // Create order entity
+        // 2. Create order entity with PENDING status
         Order order = Order.builder()
                 .userId(request.getUserId())
                 .symbol(request.getSymbol())
@@ -64,16 +70,32 @@ public class OrderController {
                 .price(request.getPrice())
                 .quantity(request.getQuantity())
                 .build();
-        orderService.createOrder(order);
+        orderService.createOrder(order); // Persists with PENDING status
 
-        // Process order through matching engine
-        matchingEngineService.processOrder(order);
+        // 3. Publish to Kafka (asynchronous, non-blocking)
+        try {
+            orderEventProducerService.publishOrder(order, correlationId);
+        } catch (Exception e) {
+            log.error("Failed to publish order to Kafka: orderId={}, error={}",
+                    order.getOrderId(), e.getMessage(), e);
 
-        // Convert to response DTO
-        OrderResponse response = OrderResponse.fromOrder(order);
+            // Update order status to FAILED
+            order.setStatus(OrderStatus.FAILED);
+            orderService.updateOrder(order);
 
-        log.info("Order created successfully: orderId={}", order.getOrderId());
-        return ApiResponse.success("Order created successfully", response);
+            throw new KafkaPublishException("Failed to submit order for processing", e);
+        }
+
+        // 4. Return 202 ACCEPTED immediately
+        OrderAcceptedResponse response = OrderAcceptedResponse.builder()
+                .orderId(order.getOrderId())
+                .status("PENDING")
+                .message("Order accepted for processing")
+                .correlationId(correlationId)
+                .build();
+
+        log.info("Order accepted: orderId={}, correlationId={}", order.getOrderId(), correlationId);
+        return ApiResponse.success("Order accepted for processing", response);
     }
 
     /**

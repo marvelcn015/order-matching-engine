@@ -135,6 +135,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle Kafka publish exception
+     */
+    @ExceptionHandler(KafkaPublishException.class)
+    public ResponseEntity<ApiResponse<Void>> handleKafkaPublish(KafkaPublishException e) {
+        log.error("Failed to publish to Kafka: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(503, "Failed to submit order for processing, please retry"));
+    }
+
+    /**
      * Handle static resource not found (e.g., favicon.ico)
      * Do not log as error since this is expected behavior
      */
