@@ -1,0 +1,42 @@
+# Prometheus Configuration for Trading Application Kafka Metrics
+
+global:
+  scrape_interval: 15s  # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  scrape_timeout: 10s  # Timeout after 10 seconds
+
+  external_labels:
+    cluster: 'trading-local'
+    environment: 'development'
+
+# Scrape configurations
+scrape_configs:
+  # Spring Boot Application Metrics
+  - job_name: 'trading-application'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Access host machine from Docker
+        labels:
+          application: 'trading'
+          component: 'spring-boot'
+
+    # Relabeling to clean up metric names
+    metric_relabel_configs:
+      # Keep only Kafka-related metrics + JVM basics
+      - source_labels: [__name__]
+        regex: 'kafka_consumer_.*|kafka_producer_.*|jvm_.*|process_.*|http_server_.*'
+        action: keep
+
+  # Kafka Broker JMX Metrics (optional - for broker-level metrics)
+  - job_name: 'kafka-broker'
+    static_configs:
+      - targets: ['kafka:9092']
+        labels:
+          application: 'kafka'
+          component: 'broker'
+    metrics_path: '/metrics'
+    scrape_interval: 30s  # Less frequent for broker metrics
+
+# Alerting rules (optional - add later)
+# rule_files:
+#   - "alerts/*.yml"
