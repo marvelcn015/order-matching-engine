@@ -52,9 +52,9 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432); // 32MB buffer
 
         // Reliability
-        props.put(ProducerConfig.RETRIES_CONFIG, 3); // Retry 3 times on failure
+        props.put(ProducerConfig.RETRIES_CONFIG, 3); // Retry 3 times on transient failures
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // Exactly-once semantics
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
         // Timeouts
         props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 30000); // 30 seconds

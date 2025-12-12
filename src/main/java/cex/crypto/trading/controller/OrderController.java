@@ -6,6 +6,7 @@ import cex.crypto.trading.dto.CreateOrderRequest;
 import cex.crypto.trading.dto.OrderAcceptedResponse;
 import cex.crypto.trading.dto.OrderResponse;
 import cex.crypto.trading.enums.OrderStatus;
+import cex.crypto.trading.event.OrderCreatedEvent;
 import cex.crypto.trading.exception.KafkaPublishException;
 import cex.crypto.trading.exception.OrderNotFoundException;
 import cex.crypto.trading.service.OrderService;
@@ -18,8 +19,11 @@ import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * REST Controller for Order management
@@ -72,9 +76,14 @@ public class OrderController {
                 .build();
         orderService.createOrder(order); // Persists with PENDING status
 
-        // 3. Publish to Kafka (asynchronous, non-blocking)
+        // 3. Publish to Kafka (wait for confirmation to ensure reliable submission)
         try {
-            orderEventProducerService.publishOrder(order, correlationId);
+            CompletableFuture<SendResult<String, OrderCreatedEvent>> future =
+                    orderEventProducerService.publishOrder(order, correlationId);
+
+            // Wait for Kafka send to complete (with timeout)
+            future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+
         } catch (Exception e) {
             log.error("Failed to publish order to Kafka: orderId={}, error={}",
                     order.getOrderId(), e.getMessage(), e);
