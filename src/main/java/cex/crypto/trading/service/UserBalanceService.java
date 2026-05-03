@@ -13,7 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -41,6 +42,9 @@ public class UserBalanceService {
     @Autowired
     private CacheWarmerService cacheWarmer;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Value("${cache.balance.local.ttl.seconds:1}")
     private int localTtlSeconds;
 
@@ -50,11 +54,15 @@ public class UserBalanceService {
     // L1 Cache: Caffeine (local, random TTL with jitter)
     private Cache<String, UserBalance> localCache;
 
+    private TransactionTemplate transactionTemplate;
+
     /**
      * Initialize local cache with dynamic expiry after dependencies are injected
      */
     @jakarta.annotation.PostConstruct
     public void initializeCache() {
+        transactionTemplate = new TransactionTemplate(transactionManager);
+
         localCache = Caffeine.newBuilder()
                 .maximumSize(10_000)
                 .expireAfter(new Expiry<String, UserBalance>() {
@@ -138,8 +146,12 @@ public class UserBalanceService {
 
     /**
      * Update available balance (Write-Through: L3 → L2 → L1 with distributed lock)
+     *
+     * TransactionTemplate is used instead of @Transactional so the DB commit happens
+     * inside the lock, before the lock is released. With @Transactional the commit would
+     * occur after executeWithLock returns, leaving a window where another thread could
+     * acquire the lock and read the pre-commit (stale) balance.
      */
-    @Transactional
     public UserBalance updateAvailableBalance(Long userId, String currency, BigDecimal amount) {
         String cacheKey = buildCacheKey(userId, currency);
         String lockKey = lockService.buildBalanceLockKey(userId, currency);
@@ -147,28 +159,29 @@ public class UserBalanceService {
         return lockService.executeWithLock(lockKey, () -> {
             // Validate sufficient balance for deduction
             if (amount.compareTo(BigDecimal.ZERO) < 0) {
-                UserBalance current = getBalance(userId, currency);
-                if (current.getAvailableBalance().add(amount).compareTo(BigDecimal.ZERO) < 0) {
+                UserBalance current = balanceMapper.findByUserIdAndCurrency(userId, currency);
+                if (current == null || current.getAvailableBalance().add(amount).compareTo(BigDecimal.ZERO) < 0) {
                     throw new InsufficientBalanceException(
                         "Insufficient balance: userId=" + userId +
                         ", currency=" + currency +
-                        ", available=" + current.getAvailableBalance() +
+                        ", available=" + (current == null ? 0 : current.getAvailableBalance()) +
                         ", required=" + amount.abs()
                     );
                 }
             }
 
-            // L3: Update database
-            balanceMapper.updateAvailableBalance(userId, currency, amount);
-            UserBalance updated = balanceMapper.findByUserIdAndCurrency(userId, currency);
+            // L3: Update database and commit inside the lock
+            UserBalance updated = transactionTemplate.execute(status -> {
+                balanceMapper.updateAvailableBalance(userId, currency, amount);
+                return balanceMapper.findByUserIdAndCurrency(userId, currency);
+            });
+
             log.info("Updated available balance: userId={}, currency={}, amount={}, newBalance={}",
                      userId, currency, amount, updated.getAvailableBalance());
 
-            // L2: Update Redis with random TTL (Write-Through)
+            // L2 + L1: Update caches after commit (lock still held)
             long randomRedisTtl = cacheWarmer.getRandomRedisTtl();
             redisTemplate.opsForValue().set(cacheKey, updated, randomRedisTtl, TimeUnit.SECONDS);
-
-            // L1: Update Caffeine (Write-Through)
             localCache.put(cacheKey, updated);
 
             return updated;
@@ -177,24 +190,26 @@ public class UserBalanceService {
 
     /**
      * Update frozen balance (with distributed lock and random TTL)
+     *
+     * Same pattern as updateAvailableBalance: commit inside the lock via TransactionTemplate.
      */
-    @Transactional
     public UserBalance updateFrozenBalance(Long userId, String currency, BigDecimal amount) {
         String cacheKey = buildCacheKey(userId, currency);
         String lockKey = lockService.buildBalanceLockKey(userId, currency);
 
         return lockService.executeWithLock(lockKey, () -> {
-            // L3: Update database
-            balanceMapper.updateFrozenBalance(userId, currency, amount);
-            UserBalance updated = balanceMapper.findByUserIdAndCurrency(userId, currency);
+            // L3: Update database and commit inside the lock
+            UserBalance updated = transactionTemplate.execute(status -> {
+                balanceMapper.updateFrozenBalance(userId, currency, amount);
+                return balanceMapper.findByUserIdAndCurrency(userId, currency);
+            });
+
             log.info("Updated frozen balance: userId={}, currency={}, amount={}, newBalance={}",
                      userId, currency, amount, updated.getFrozenBalance());
 
-            // L2: Update Redis with random TTL (Write-Through)
+            // L2 + L1: Update caches after commit (lock still held)
             long randomRedisTtl = cacheWarmer.getRandomRedisTtl();
             redisTemplate.opsForValue().set(cacheKey, updated, randomRedisTtl, TimeUnit.SECONDS);
-
-            // L1: Update Caffeine (Write-Through)
             localCache.put(cacheKey, updated);
 
             return updated;
